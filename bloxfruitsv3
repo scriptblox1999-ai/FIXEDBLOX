@@ -1,0 +1,158 @@
+--[[==============================================================================================
+||                                                                                          ||
+||              SCRIPT AUTO FARM BAÚS (FUSÃO OTIMIZADA) - BLOX FRUITS                       ||
+||                                                                                          ||
+||    -> COMPATÍVEL COM MOBILE (DELTA, FLUXUS) E DESKTOP (KRNL, SYNAPSE, etc.)              ||
+||    -> FARM DE TODOS OS BAÚS, EM LOOP, COM TELEPORTE OTIMIZADO                            ||
+||    -> AGORA COM SERVER HOP AUTOMÁTICO                                                    ||
+||    -> AVISO: O uso de scripts pode causar banimento. Use por sua conta e risco.          ||
+||                                                                                          ||
+==============================================================================================]]
+
+print("======================================================")
+print("|| Script de Farm de Baús OTIMIZADO injetado!       ||")
+print("|| Aguarde o personagem carregar para iniciar...    ||")
+print("======================================================")
+
+-- CONFIGURAÇÕES
+local TELEPORT_SPEED = 300       -- Velocidade do teleporte (Studs por segundo)
+local SCAN_INTERVAL = 1.5        -- Intervalo de loop (segundos)
+local HOP_DELAY = 3              -- Tempo antes de trocar de servidor se não houver baús
+
+-- SERVIÇOS
+local Players = game:GetService("Players")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
+local Workspace = game:GetService("Workspace")
+
+-- VARIÁVEIS
+local LocalPlayer = Players.LocalPlayer
+local UncheckedChests = {}
+local FirstRun = true
+
+-- Função para obter personagem
+local function getCharacter()
+    if not LocalPlayer.Character then
+        LocalPlayer.CharacterAdded:Wait()
+    end
+    LocalPlayer.Character:WaitForChild("HumanoidRootPart")
+    return LocalPlayer.Character
+end
+
+-- Função para noclip
+local function toggleNoclip(Toggle: boolean)
+    for _, v in pairs(getCharacter():GetChildren()) do
+        if v:IsA("BasePart") then
+            v.CanCollide = not Toggle
+        end
+    end
+end
+
+-- Função de teleporte suave
+local function teleportTo(destinationCFrame, speed)
+    local character = getCharacter()
+    local rootPart = character.HumanoidRootPart
+    if not rootPart then return end
+    
+    toggleNoclip(true)
+    local Magnitude = (rootPart.Position - destinationCFrame.Position).Magnitude
+
+    while Magnitude > 5 do
+        local Direction = (destinationCFrame.Position - rootPart.Position).Unit
+        rootPart.CFrame = rootPart.CFrame + Direction * (speed or TELEPORT_SPEED) * task.wait()
+        Magnitude = (rootPart.Position - destinationCFrame.Position).Magnitude
+    end
+
+    rootPart.CFrame = destinationCFrame
+    task.wait(0.1)
+    toggleNoclip(false)
+end
+
+-- Ordenar lista por distância
+local function sortByDistance(ObjectList: table)
+    local RootPart = getCharacter().HumanoidRootPart
+    table.sort(ObjectList, function(A, B)
+        local RootPos = RootPart.Position
+        local DistanceA = (RootPos - A.Position).Magnitude
+        local DistanceB = (RootPos - B.Position).Magnitude
+        return DistanceA < DistanceB
+    end)
+end
+
+-- Obter baús ativos
+local function getChestsSorted()
+    if FirstRun then
+        FirstRun = false
+        for _, obj in pairs(game:GetDescendants()) do
+            if obj.Name:find("Chest") and obj:IsA("Part") then
+                table.insert(UncheckedChests, obj)
+            end
+        end
+    end
+
+    local Chests = {}
+    for _, Chest in pairs(UncheckedChests) do
+        if Chest and Chest.Parent and Chest:FindFirstChild("TouchInterest") then
+            table.insert(Chests, Chest)
+        end
+    end
+
+    sortByDistance(Chests)
+    return Chests
+end
+
+-- Função de server hop
+local function serverHop()
+    print(">> Nenhum baú encontrado. Mudando de servidor em "..HOP_DELAY.."s...")
+    task.wait(HOP_DELAY)
+    local servers = {}
+    local cursor = ""
+    local PlaceId = game.PlaceId
+    
+    -- busca servidores públicos
+    local function listServers()
+        local url = "https://games.roblox.com/v1/games/"..PlaceId.."/servers/Public?sortOrder=Asc&limit=100"..(cursor ~= "" and "&cursor="..cursor or "")
+        local body = game:HttpGet(url)
+        return HttpService:JSONDecode(body)
+    end
+
+    local success, result = pcall(listServers)
+    if success and result and result.data then
+        for _, server in ipairs(result.data) do
+            if server.playing < server.maxPlayers and server.id ~= game.JobId then
+                TeleportService:TeleportToPlaceInstance(PlaceId, server.id, LocalPlayer)
+                return
+            end
+        end
+    end
+
+    -- fallback: apenas reconecta no mesmo lugar
+    TeleportService:Teleport(PlaceId, LocalPlayer)
+end
+
+-- Loop principal
+local function startChestFarm()
+    while task.wait(SCAN_INTERVAL) do
+        local Chests = getChestsSorted()
+        if #Chests > 0 then
+            for _, chest in ipairs(Chests) do
+                if chest and chest.Parent then
+                    local targetPosition = chest.CFrame * CFrame.new(0, 2.5, 0)
+                    teleportTo(targetPosition, TELEPORT_SPEED)
+                    task.wait(0.2)
+                end
+            end
+        else
+            serverHop()
+        end
+    end
+end
+
+-- Início
+if getCharacter() then
+    startChestFarm()
+else
+    LocalPlayer.CharacterAdded:Wait(function()
+        startChestFarm()
+    end)
+end
