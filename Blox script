@@ -15,7 +15,6 @@ print("|| Script de Farm de Baús INJETADO com sucesso!     ||")
 print("|| Aguardando o personagem carregar para iniciar... ||")
 print("======================================================")
 
-
 -- CONFIGURAÇÕES GERAIS
 local TELEPORT_SPEED = 350      -- Velocidade do teleporte. Se achar lento, aumente.
 local SCAN_INTERVAL = 1.5       -- Tempo em segundos entre cada busca por baús.
@@ -67,7 +66,7 @@ local function teleportTo(destinationCFrame)
     setNoclipEnabled(false)
 end
 
--- Função principal que busca e coleta os baús
+-- Função principal que busca e coleta TODOS os baús
 local function startChestFarm()
     while task.wait(SCAN_INTERVAL) do
         local character = getCharacter()
@@ -84,18 +83,21 @@ local function startChestFarm()
         end
 
         if #availableChests > 0 then
-            -- Ordena a lista para pegar o baú mais próximo primeiro
+            -- Ordena a lista para pegar os baús mais próximos primeiro
             table.sort(availableChests, function(chestA, chestB)
                 local distanceA = (rootPart.Position - chestA.Position).Magnitude
                 local distanceB = (rootPart.Position - chestB.Position).Magnitude
                 return distanceA < distanceB
             end)
             
-            local nearestChest = availableChests[1]
-            
-            -- Teleporta para um ponto um pouco acima do baú
-            local targetPosition = nearestChest.CFrame * CFrame.new(0, 2.5, 0)
-            teleportTo(targetPosition)
+            -- Agora percorre TODOS os baús encontrados
+            for _, chest in ipairs(availableChests) do
+                if chest and chest.Parent then -- ainda existe no mapa
+                    local targetPosition = chest.CFrame * CFrame.new(0, 2.5, 0)
+                    teleportTo(targetPosition)
+                    task.wait(0.2) -- pequena pausa entre os teleportes para garantir coleta
+                end
+            end
         end
     end
 end
