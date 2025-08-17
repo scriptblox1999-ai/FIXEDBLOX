@@ -1,112 +1,85 @@
---[[==============================================================================================
-||                                                                                          ||
-||       HUB FARM UNIVERSAL - BLOX FRUITS (Sea 3 Bosses + Baús + Skills + Kill Aura)        ||
-||                                                                                          ||
-||    -> AutoFarm Baús + ServerHop                                                          ||
-||    -> AutoFarm Bosses (Sea 3)                                                            ||
-||    -> Kill Aura                                                                          ||
-||    -> Auto Skill (Z,X,C,V)                                                               ||
-||    -> Teleporte manual pros Bosses                                                       ||
-||    -> Modo de Farm (Espada, Fruta, FightingStyle)                                        ||
-||                                                                                          ||
-==============================================================================================]]
+--[[ ======================================================
+      Blox Fruits - Multi Script Hub (GUI + Toggles)
+      Contém:
+      - Auto Farm de Baús (com ServerHop)
+      - Auto Farm de Bosses (Sea 3)
+      - Kill Aura
+      - Auto Skill
+      - Seleção de estilo de farm
+========================================================= ]]
 
--- SERVIÇOS
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Workspace = game:GetService("Workspace")
-local TeleportService = game:GetService("TeleportService")
-local HttpService = game:GetService("HttpService")
-local VU = game:GetService("VirtualUser")
-local LocalPlayer = Players.LocalPlayer
-
--- FLAGS
-getgenv().AutoFarmChests = false
-getgenv().AutoBossFarm = false
-getgenv().KillAura = false
-getgenv().AutoSkill = false
-getgenv().FarmMode = "Espada"
+print("Hub iniciado...")
 
 -- CONFIG
 local TELEPORT_SPEED = 300
 local SCAN_INTERVAL = 1.5
-local HOP_DELAY = 3
 
--- VARIÁVEIS
-local UncheckedChests = {}
-local FirstRun = true
+-- SERVIÇOS
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local Workspace = game:GetService("Workspace")
+local VU = game:GetService("VirtualUser")
+local TeleportService = game:GetService("TeleportService")
 
--- LISTA DE BOSSES SEA 3
-local Bosses = {
-    ["Stone"] = {cf = CFrame.new(-1085, 40, 6779), name = "Stone"},
-    ["Island Empress"] = {cf = CFrame.new(5780, 100, 1240), name = "Island Empress"},
-    ["Kilo Admiral"] = {cf = CFrame.new(2850, 450, -7200), name = "Kilo Admiral"},
-    ["Captain Elephant"] = {cf = CFrame.new(-13340, 470, -8400), name = "Captain Elephant"},
-    ["Beautiful Pirate"] = {cf = CFrame.new(5200, 60, -11000), name = "Beautiful Pirate"}
-}
+-- FLAGS GLOBAIS
+getgenv().AutoFarmChests = false
+getgenv().AutoBossFarm = false
+getgenv().KillAura = false
+getgenv().AutoSkill = false
+getgenv().FarmMode = "Sword"
 
--- FUNÇÕES BÁSICAS
-local function getChar()
-    if not LocalPlayer.Character then LocalPlayer.CharacterAdded:Wait() end
+-- =================== FUNÇÕES BASE ===================
+
+local function getCharacter()
+    if not LocalPlayer.Character then
+        LocalPlayer.CharacterAdded:Wait()
+    end
+    LocalPlayer.Character:WaitForChild("HumanoidRootPart")
     return LocalPlayer.Character
 end
 
+local function toggleNoclip(Toggle)
+    for _, v in pairs(getCharacter():GetChildren()) do
+        if v:IsA("BasePart") then
+            v.CanCollide = not Toggle
+        end
+    end
+end
+
 local function teleportTo(destinationCFrame, speed)
-    local char = getChar()
-    local root = char:WaitForChild("HumanoidRootPart")
-    local Magnitude = (root.Position - destinationCFrame.Position).Magnitude
+    local character = getCharacter()
+    local rootPart = character:WaitForChild("HumanoidRootPart")
+    toggleNoclip(true)
+    local Magnitude = (rootPart.Position - destinationCFrame.Position).Magnitude
     while Magnitude > 5 do
-        local Direction = (destinationCFrame.Position - root.Position).Unit
-        root.CFrame = root.CFrame + Direction * (speed or TELEPORT_SPEED) * task.wait()
-        Magnitude = (root.Position - destinationCFrame.Position).Magnitude
+        if not (getgenv().AutoFarmChests or getgenv().AutoBossFarm) then break end
+        local Direction = (destinationCFrame.Position - rootPart.Position).Unit
+        rootPart.CFrame = rootPart.CFrame + Direction * (speed or TELEPORT_SPEED) * task.wait()
+        Magnitude = (rootPart.Position - destinationCFrame.Position).Magnitude
     end
-    root.CFrame = destinationCFrame
+    rootPart.CFrame = destinationCFrame
+    toggleNoclip(false)
 end
 
--- =================== AUTO SKILL ===================
-local function useSkills()
-    local keys = {"Z","X","C","V"}
-    for _,k in pairs(keys) do
-        VU:SendKeyEvent(true, k, false, game)
-        task.wait(0.2)
-        VU:SendKeyEvent(false, k, false, game)
-        task.wait(0.4)
+local function serverHop()
+    local servers = game.HttpService:JSONDecode(
+        game:HttpGet("https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Asc&limit=100")
+    )
+    for _, v in pairs(servers.data) do
+        if v.playing < v.maxPlayers then
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, v.id, LocalPlayer)
+            break
+        end
     end
 end
 
-task.spawn(function()
-    while task.wait(1) do
-        if getgenv().AutoSkill then
-            useSkills()
-        end
-    end
-end)
+-- =================== CHESTS ===================
 
--- =================== KILL AURA ===================
-task.spawn(function()
-    while task.wait(0.3) do
-        if getgenv().KillAura then
-            local char = getChar()
-            local root = char:FindFirstChild("HumanoidRootPart")
-            if root then
-                for _, mob in pairs(workspace.Enemies:GetChildren()) do
-                    if mob:FindFirstChild("HumanoidRootPart") and mob:FindFirstChild("Humanoid") then
-                        local dist = (mob.HumanoidRootPart.Position - root.Position).Magnitude
-                        if dist < 35 and mob.Humanoid.Health > 0 then
-                            VU:Button1Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-                            task.wait(0.05)
-                            VU:Button1Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-                        end
-                    end
-                end
-            end
-        end
-    end
-end)
+local UncheckedChests = {}
+local FirstRun = true
 
--- =================== AUTO FARM BAÚS ===================
-local function sortByDistance(ObjectList: table)
-    local RootPart = getChar().HumanoidRootPart
+local function sortByDistance(ObjectList)
+    local RootPart = getCharacter().HumanoidRootPart
     table.sort(ObjectList, function(A, B)
         return (RootPart.Position - A.Position).Magnitude < (RootPart.Position - B.Position).Magnitude
     end)
@@ -131,52 +104,63 @@ local function getChestsSorted()
     return Chests
 end
 
-local function serverHop()
-    task.wait(HOP_DELAY)
-    local PlaceId = game.PlaceId
-    local function listServers()
-        local url = "https://games.roblox.com/v1/games/"..PlaceId.."/servers/Public?sortOrder=Asc&limit=100"
-        local body = game:HttpGet(url)
-        return HttpService:JSONDecode(body)
+-- =================== BOSSES SEA 3 ===================
+
+local Bosses = {
+    ["Stone"] = {name="Stone", cf=CFrame.new(-1085, 40, 6779)},
+    ["Island Empress"] = {name="Island Empress", cf=CFrame.new(5780, 100, 1240)},
+    ["Kilo Admiral"] = {name="Kilo Admiral", cf=CFrame.new(2850, 450, -7200)},
+    ["Captain Elephant"] = {name="Captain Elephant", cf=CFrame.new(-13340, 470, -8400)},
+    ["Beautiful Pirate"] = {name="Beautiful Pirate", cf=CFrame.new(5200, 60, -11000)},
+}
+
+-- =================== SKILLS ===================
+
+local UIS = game:GetService("UserInputService")
+local function useSkills()
+    for _, key in ipairs({"Z","X","C","V"}) do
+        game:GetService("VirtualInputManager"):SendKeyEvent(true, key, false, game)
+        task.wait(0.1)
+        game:GetService("VirtualInputManager"):SendKeyEvent(false, key, false, game)
     end
-    local success, result = pcall(listServers)
-    if success and result and result.data then
-        for _, server in ipairs(result.data) do
-            if server.playing < server.maxPlayers and server.id ~= game.JobId then
-                TeleportService:TeleportToPlaceInstance(PlaceId, server.id, LocalPlayer)
-                return
-            end
-        end
-    end
-    TeleportService:Teleport(PlaceId, LocalPlayer)
 end
 
+-- =================== THREADS COM TOGGLE ===================
+
+-- AUTO FARM BAÚS
 task.spawn(function()
-    while task.wait(SCAN_INTERVAL) do
+    while true do
+        task.wait(SCAN_INTERVAL)
         if getgenv().AutoFarmChests then
             local Chests = getChestsSorted()
             if #Chests > 0 then
                 for _, chest in ipairs(Chests) do
+                    if not getgenv().AutoFarmChests then break end
                     if chest and chest.Parent then
                         teleportTo(chest.CFrame * CFrame.new(0,2.5,0), TELEPORT_SPEED)
                         task.wait(0.2)
                     end
                 end
             else
-                serverHop()
+                if getgenv().AutoFarmChests then
+                    serverHop()
+                end
             end
         end
     end
 end)
 
--- =================== AUTO FARM BOSSES ===================
+-- AUTO FARM BOSSES
 task.spawn(function()
-    while task.wait(5) do
+    while true do
+        task.wait(5)
         if getgenv().AutoBossFarm then
             for boss, data in pairs(Bosses) do
+                if not getgenv().AutoBossFarm then break end
                 teleportTo(data.cf, TELEPORT_SPEED)
                 task.wait(1)
                 for _, mob in pairs(workspace.Enemies:GetChildren()) do
+                    if not getgenv().AutoBossFarm then break end
                     if mob.Name == data.name and mob:FindFirstChild("Humanoid") then
                         while mob.Humanoid.Health > 0 and getgenv().AutoBossFarm do
                             VU:Button1Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
@@ -192,64 +176,107 @@ task.spawn(function()
     end
 end)
 
--- =================== GUI ===================
-local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
-local Frame = Instance.new("Frame", ScreenGui)
-local UICorner = Instance.new("UICorner", Frame)
-Frame.Size = UDim2.new(0, 280, 0, 400)
-Frame.Position = UDim2.new(0.05, 0, 0.25, 0)
-Frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-UICorner.CornerRadius = UDim.new(0, 12)
+-- KILL AURA
+task.spawn(function()
+    while true do
+        task.wait(0.3)
+        if getgenv().KillAura then
+            for _, mob in pairs(workspace.Enemies:GetChildren()) do
+                if mob:FindFirstChild("HumanoidRootPart") and mob:FindFirstChild("Humanoid") then
+                    if (mob.HumanoidRootPart.Position - getCharacter().HumanoidRootPart.Position).Magnitude < 50 then
+                        VU:Button1Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+                        task.wait(0.05)
+                        VU:Button1Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+                    end
+                end
+            end
+        end
+    end
+end)
 
-local function createBtn(y, text, callback)
-    local Btn = Instance.new("TextButton", Frame)
-    Btn.Size = UDim2.new(0, 260, 0, 35)
-    Btn.Position = UDim2.new(0, 10, 0, y)
-    Btn.Text = text
-    Btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+-- AUTO SKILL
+task.spawn(function()
+    while true do
+        task.wait(3)
+        if getgenv().AutoSkill then
+            useSkills()
+        end
+    end
+end)
+
+-- =================== GUI ===================
+
+local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
+
+local MainFrame = Instance.new("Frame", ScreenGui)
+MainFrame.Size = UDim2.new(0, 220, 0, 320)
+MainFrame.Position = UDim2.new(0.05, 0, 0.3, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+MainFrame.Active = true
+MainFrame.Draggable = true
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 12)
+
+local Title = Instance.new("TextLabel", MainFrame)
+Title.Size = UDim2.new(1, 0, 0, 30)
+Title.Text = "Blox Fruits Hub"
+Title.BackgroundTransparency = 1
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.Font = Enum.Font.SourceSansBold
+Title.TextSize = 18
+
+-- Função para criar botão toggle
+local function createToggle(name, varName, order)
+    local Btn = Instance.new("TextButton", MainFrame)
+    Btn.Size = UDim2.new(1, -20, 0, 30)
+    Btn.Position = UDim2.new(0, 10, 0, 35 + (order*35))
+    Btn.Text = name.." [OFF]"
+    Btn.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
     Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    Btn.Font = Enum.Font.SourceSansBold
+    Btn.Font = Enum.Font.SourceSans
     Btn.TextSize = 16
-    Btn.MouseButton1Click:Connect(function() callback(Btn) end)
-    return Btn
+    Btn.MouseButton1Click:Connect(function()
+        getgenv()[varName] = not getgenv()[varName]
+        Btn.Text = name.." ["..(getgenv()[varName] and "ON" or "OFF").."]"
+    end)
 end
 
-local BtnFarmChest = createBtn(10, "Auto Farm Baús: OFF", function(self)
-    getgenv().AutoFarmChests = not getgenv().AutoFarmChests
-    self.Text = "Auto Farm Baús: " .. (getgenv().AutoFarmChests and "ON" or "OFF")
+-- BOTÕES
+createToggle("Auto Farm Baús","AutoFarmChests",0)
+createToggle("Auto Farm Bosses","AutoBossFarm",1)
+createToggle("Kill Aura","KillAura",2)
+createToggle("Auto Skill","AutoSkill",3)
+
+-- Dropdown de modo de farm
+local ModeBtn = Instance.new("TextButton", MainFrame)
+ModeBtn.Size = UDim2.new(1, -20, 0, 30)
+ModeBtn.Position = UDim2.new(0, 10, 0, 35 + (4*35))
+ModeBtn.Text = "Modo: Sword"
+ModeBtn.BackgroundColor3 = Color3.fromRGB(70, 50, 50)
+ModeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ModeBtn.Font = Enum.Font.SourceSans
+ModeBtn.TextSize = 16
+
+local modes = {"Sword","Fruit","Fighting Style"}
+local currentMode = 1
+ModeBtn.MouseButton1Click:Connect(function()
+    currentMode = currentMode % #modes + 1
+    getgenv().FarmMode = modes[currentMode]
+    ModeBtn.Text = "Modo: "..modes[currentMode]
 end)
 
-local BtnKA = createBtn(55, "Kill Aura: OFF", function(self)
-    getgenv().KillAura = not getgenv().KillAura
-    self.Text = "Kill Aura: " .. (getgenv().KillAura and "ON" or "OFF")
-end)
-
-local BtnSkill = createBtn(100, "Auto Skill: OFF", function(self)
-    getgenv().AutoSkill = not getgenv().AutoSkill
-    self.Text = "Auto Skill: " .. (getgenv().AutoSkill and "ON" or "OFF")
-end)
-
-local BtnMode = createBtn(145, "Modo: Espada", function(self)
-    if getgenv().FarmMode == "Espada" then
-        getgenv().FarmMode = "Fruta"
-    elseif getgenv().FarmMode == "Fruta" then
-        getgenv().FarmMode = "FightingStyle"
-    else
-        getgenv().FarmMode = "Espada"
-    end
-    self.Text = "Modo: " .. getgenv().FarmMode
-end)
-
-local BtnBossFarm = createBtn(190, "Auto Boss Farm: OFF", function(self)
-    getgenv().AutoBossFarm = not getgenv().AutoBossFarm
-    self.Text = "Auto Boss Farm: " .. (getgenv().AutoBossFarm and "ON" or "OFF")
-end)
-
--- Botões de teleporte manual pros bosses
-local y = 235
+-- Botões de bosses individuais
+local y = 35 + (5*35)
 for name, data in pairs(Bosses) do
-    createBtn(y, "Teleport: "..name, function()
+    local Btn = Instance.new("TextButton", MainFrame)
+    Btn.Size = UDim2.new(1, -20, 0, 25)
+    Btn.Position = UDim2.new(0, 10, 0, y)
+    Btn.Text = "TP "..name
+    Btn.BackgroundColor3 = Color3.fromRGB(50, 70, 50)
+    Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Btn.Font = Enum.Font.SourceSans
+    Btn.TextSize = 14
+    Btn.MouseButton1Click:Connect(function()
         teleportTo(data.cf, TELEPORT_SPEED)
     end)
-    y = y + 40
+    y = y + 30
 end
