@@ -1,42 +1,11 @@
---[[
-==============================================================================================
-||                                                                                          ||
-||                                BLOX FRUITS HUB - SEA 3                                  ||
-||                                                                                          ||
-||  - Auto Farm Baús (com server hop)                                                       ||
-||  - Auto Farm Bosses SEA 3                                                                ||
-||  - Kill Aura                                                                             ||
-||  - Auto Skill (Z, X, C, V)                                                               ||
-||  - Sistema de Debug no Topo (mostra status ON/OFF e erros)                               ||
-||  - GUI de Toggles (ON/OFF)                                                               ||
-||                                                                                          ||
-||  -> Compatível com executores Mobile e PC (Fluxus, Delta, Synapse, KRNL, etc.)           ||
-||  -> Aviso: O uso de scripts pode causar banimento. Use por sua conta e risco.            ||
-||                                                                                          ||
-==============================================================================================
-]]
+-- Gui principal no lugar seguro
+local guiParent = gethui and gethui() or game:FindFirstChildOfClass("CoreGui") or Players.LocalPlayer:WaitForChild("PlayerGui")
 
--- Variáveis Globais
-getgenv().AutoFarmChests = false
-getgenv().AutoBossFarm   = false
-getgenv().KillAura       = false
-getgenv().AutoSkill      = false
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Parent = guiParent
+ScreenGui.Name = "BF_Hub"
 
--- Configurações
-local TELEPORT_SPEED = 300
-local SCAN_INTERVAL = 1.5
-
--- Serviços
-local Players = game:GetService("Players")
-local Workspace = game:GetService("Workspace")
-local TeleportService = game:GetService("TeleportService")
-local VU = game:GetService("VirtualUser")
-
-local LocalPlayer = Players.LocalPlayer
-local UncheckedChests, FirstRun = {}, true
-
--- ================= DEBUG =================
-local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
+-- Debug
 local Status = Instance.new("TextLabel", ScreenGui)
 Status.Size = UDim2.new(0,300,0,30)
 Status.Position = UDim2.new(0.5,-150,0,10)
@@ -51,23 +20,26 @@ local function setStatus(msg, color)
     Status.TextColor3 = color or Color3.fromRGB(0,255,0)
 end
 
-local function updateDebugToggle(name, state)
-    setStatus(name .. " [" .. (state and "ON" or "OFF") .. "]")
-end
+-- Variáveis globais
+getgenv().AutoFarmChests = false
+getgenv().AutoBossFarm   = false
+getgenv().KillAura       = false
+getgenv().AutoSkill      = false
 
--- Teste inicial
-local ok, err = pcall(function()
-    game:GetService("Players")
-    game:GetService("Workspace")
-    game:GetService("TeleportService")
-end)
-if ok then
-    setStatus("Hub carregado com sucesso!", Color3.fromRGB(0,255,0))
-else
-    setStatus("Erro: "..tostring(err), Color3.fromRGB(255,0,0))
-end
+-- Serviços
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
+local VU = game:GetService("VirtualUser")
+local LocalPlayer = Players.LocalPlayer
 
--- ================= FUNÇÕES BASE =================
+local TELEPORT_SPEED = 300
+local SCAN_INTERVAL = 1.5
+
+local UncheckedChests, FirstRun = {}, true
+
+-- Funções base
 local function getCharacter()
     if not LocalPlayer.Character then
         LocalPlayer.CharacterAdded:Wait()
@@ -84,13 +56,13 @@ local function toggleNoclip(state)
     end
 end
 
-local function teleportTo(destinationCFrame, speed)
+local function teleportTo(destinationCFrame, speed, toggleCheck)
     local character = getCharacter()
     local rootPart = character:FindFirstChild("HumanoidRootPart")
     if not rootPart then return end
     toggleNoclip(true)
     local Magnitude = (rootPart.Position - destinationCFrame.Position).Magnitude
-    while Magnitude > 5 and getgenv().AutoFarmChests or getgenv().AutoBossFarm do
+    while Magnitude > 5 and getgenv()[toggleCheck] do
         local Direction = (destinationCFrame.Position - rootPart.Position).Unit
         rootPart.CFrame = rootPart.CFrame + Direction * (speed or TELEPORT_SPEED) * task.wait()
         Magnitude = (rootPart.Position - destinationCFrame.Position).Magnitude
@@ -126,7 +98,7 @@ local function getChestsSorted()
 end
 
 local function serverHop()
-    local servers = game.HttpService:JSONDecode(
+    local servers = HttpService:JSONDecode(
         game:HttpGet("https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Asc&limit=100")
     )
     for _, s in pairs(servers.data) do
@@ -137,16 +109,16 @@ local function serverHop()
     end
 end
 
--- ================= BOSSES SEA 3 =================
+-- Bosses SEA 3
 local Bosses = {
-    ["rip_indra"]      = {cf = CFrame.new(-5359, 424, -2735), name="rip_indra"},
-    ["Cake Queen"]     = {cf = CFrame.new(-710, 381, -11010), name="Cake Queen"},
-    ["Dough King"]     = {cf = CFrame.new(-2100, 75, -12000), name="Dough King"},
-    ["Kaidou"]         = {cf = CFrame.new(3000, 400, -7500),  name="Kaidou"},
-    ["Lava Admiral"]   = {cf = CFrame.new(-5000, 100, 6000),  name="Lava Admiral"},
+    ["rip_indra"]      = CFrame.new(-5359, 424, -2735),
+    ["Cake Queen"]     = CFrame.new(-710, 381, -11010),
+    ["Dough King"]     = CFrame.new(-2100, 75, -12000),
+    ["Kaidou"]         = CFrame.new(3000, 400, -7500),
+    ["Lava Admiral"]   = CFrame.new(-5000, 100, 6000),
 }
 
--- ================= AUTO SKILL =================
+-- Auto Skill
 local function useSkills()
     local UIS = game:GetService("VirtualInputManager")
     for _, key in pairs({"Z","X","C","V"}) do
@@ -156,17 +128,15 @@ local function useSkills()
     end
 end
 
--- ================= THREADS =================
--- Auto Farm Baús
+-- Threads
 task.spawn(function()
-    while true do
-        task.wait(SCAN_INTERVAL)
+    while task.wait(SCAN_INTERVAL) do
         if getgenv().AutoFarmChests then
             local Chests = getChestsSorted()
             if #Chests > 0 then
                 for _, chest in ipairs(Chests) do
                     if not getgenv().AutoFarmChests then break end
-                    teleportTo(chest.CFrame * CFrame.new(0,2.5,0), TELEPORT_SPEED)
+                    teleportTo(chest.CFrame * CFrame.new(0,2.5,0), TELEPORT_SPEED, "AutoFarmChests")
                     task.wait(0.2)
                 end
             else
@@ -176,20 +146,16 @@ task.spawn(function()
     end
 end)
 
--- Auto Farm Bosses
 task.spawn(function()
-    while true do
-        task.wait(2)
+    while task.wait(2) do
         if getgenv().AutoBossFarm then
-            for boss, data in pairs(Bosses) do
+            for bossName, cf in pairs(Bosses) do
                 if not getgenv().AutoBossFarm then break end
-                teleportTo(data.cf, TELEPORT_SPEED)
+                teleportTo(cf, TELEPORT_SPEED, "AutoBossFarm")
                 task.wait(1)
                 for _, mob in pairs(Workspace.Enemies:GetChildren()) do
-                    if not getgenv().AutoBossFarm then break end
-                    if mob.Name == data.name and mob:FindFirstChild("Humanoid") then
-                        while mob.Humanoid.Health > 0 do
-                            if not getgenv().AutoBossFarm then break end
+                    if mob.Name == bossName and mob:FindFirstChild("Humanoid") then
+                        while mob.Humanoid.Health > 0 and getgenv().AutoBossFarm do
                             VU:Button1Down(Vector2.new(0,0), Workspace.CurrentCamera.CFrame)
                             task.wait(0.05)
                             VU:Button1Up(Vector2.new(0,0), Workspace.CurrentCamera.CFrame)
@@ -203,13 +169,10 @@ task.spawn(function()
     end
 end)
 
--- Kill Aura
 task.spawn(function()
-    while true do
-        task.wait(0.3)
+    while task.wait(0.3) do
         if getgenv().KillAura then
             for _, mob in pairs(Workspace.Enemies:GetChildren()) do
-                if not getgenv().KillAura then break end
                 if mob:FindFirstChild("HumanoidRootPart") and mob:FindFirstChild("Humanoid") then
                     if (mob.HumanoidRootPart.Position - getCharacter().HumanoidRootPart.Position).Magnitude < 50 then
                         VU:Button1Down(Vector2.new(0,0), Workspace.CurrentCamera.CFrame)
@@ -222,15 +185,13 @@ task.spawn(function()
     end
 end)
 
--- Auto Skill
 task.spawn(function()
-    while true do
-        task.wait(1)
+    while task.wait(1) do
         if getgenv().AutoSkill then useSkills() end
     end
 end)
 
--- ================= GUI BOTÕES =================
+-- GUI botões
 local function createToggle(text, pos, callback)
     local Btn = Instance.new("TextButton", ScreenGui)
     Btn.Size = UDim2.new(0,200,0,40)
@@ -245,14 +206,13 @@ local function createToggle(text, pos, callback)
         local state = callback()
         Btn.Text = text.." ["..(state and "ON" or "OFF").."]"
         Btn.BackgroundColor3 = state and Color3.fromRGB(60,120,60) or Color3.fromRGB(40,40,60)
-        updateDebugToggle(text, state)
+        setStatus(text.." ["..(state and "ON" or "OFF").."]")
     end)
-    return Btn
 end
 
--- Criar botões
 createToggle("Auto Farm Baús",   50, function() getgenv().AutoFarmChests = not getgenv().AutoFarmChests return getgenv().AutoFarmChests end)
 createToggle("Auto Farm Bosses",100, function() getgenv().AutoBossFarm   = not getgenv().AutoBossFarm   return getgenv().AutoBossFarm end)
 createToggle("Kill Aura",       150, function() getgenv().KillAura       = not getgenv().KillAura       return getgenv().KillAura end)
 createToggle("Auto Skill",      200, function() getgenv().AutoSkill      = not getgenv().AutoSkill      return getgenv().AutoSkill end)
 
+setStatus("Hub carregado com sucesso!", Color3.fromRGB(0,255,0))
