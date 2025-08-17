@@ -1,0 +1,110 @@
+--[[
+==============================================================================================
+||                                                                                          ||
+||                     SCRIPT AUTO FARM BAÚS - BLOX FRUITS                                  ||
+||                                                                                          ||
+||    -> FORMATADO PARA EXECUTORES MOBILE (DELTA, FLUXUS) E DESKTOP (KRNL, SYNAPSE)         ||
+||    -> AVISO: O uso de scripts pode causar banimento. Use por sua conta e risco.          ||
+||                                                                                          ||
+==============================================================================================
+]]
+
+-- MENSAGEM DE CONFIRMAÇÃO (APARECE NO CONSOLE DO DELTA AO EXECUTAR)
+print("======================================================")
+print("|| Script de Farm de Baús INJETADO com sucesso!     ||")
+print("|| Aguardando o personagem carregar para iniciar... ||")
+print("======================================================")
+
+
+-- CONFIGURAÇÕES GERAIS
+local TELEPORT_SPEED = 350      -- Velocidade do teleporte. Se achar lento, aumente.
+local SCAN_INTERVAL = 1.5       -- Tempo em segundos entre cada busca por baús.
+
+-- SERVIÇOS DO ROBLOX
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+
+-- VARIÁVEIS LOCAIS
+local LocalPlayer = Players.LocalPlayer
+
+-- Função para obter o personagem do jogador de forma segura
+local function getCharacter()
+    local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    character:WaitForChild("Humanoid")
+    character:WaitForChild("HumanoidRootPart")
+    return character
+end
+
+-- Função para atravessar paredes (Noclip)
+local function setNoclipEnabled(enabled)
+    local character = getCharacter()
+    if not character then return end
+    
+    for _, part in ipairs(character:GetChildren()) do
+        if part:IsA("BasePart") then
+            part.CanCollide = not enabled
+        end
+    end
+end
+
+-- Função para teleportar o jogador para uma localização
+local function teleportTo(destinationCFrame)
+    local character = getCharacter()
+    if not character then return end
+    
+    local rootPart = character.HumanoidRootPart
+    
+    setNoclipEnabled(true)
+    
+    while (rootPart.Position - destinationCFrame.Position).Magnitude > 5 do
+        local direction = (destinationCFrame.Position - rootPart.Position).Unit
+        rootPart.CFrame = rootPart.CFrame + direction * TELEPORT_SPEED * task.wait()
+    end
+    
+    rootPart.CFrame = destinationCFrame
+    task.wait(0.1)
+    
+    setNoclipEnabled(false)
+end
+
+-- Função principal que busca e coleta os baús
+local function startChestFarm()
+    while task.wait(SCAN_INTERVAL) do
+        local character = getCharacter()
+        if not character or not character:FindFirstChild("HumanoidRootPart") then continue end
+        
+        local rootPart = character.HumanoidRootPart
+        local availableChests = {}
+
+        -- Escaneia o mapa por baús que ainda podem ser coletados
+        for _, item in ipairs(Workspace:GetDescendants()) do
+            if item:IsA("Part") and item.Name:find("Chest") and item:FindFirstChild("TouchInterest") then
+                table.insert(availableChests, item)
+            end
+        end
+
+        if #availableChests > 0 then
+            -- Ordena a lista para pegar o baú mais próximo primeiro
+            table.sort(availableChests, function(chestA, chestB)
+                local distanceA = (rootPart.Position - chestA.Position).Magnitude
+                local distanceB = (rootPart.Position - chestB.Position).Magnitude
+                return distanceA < distanceB
+            end)
+            
+            local nearestChest = availableChests[1]
+            
+            -- Teleporta para um ponto um pouco acima do baú
+            local targetPosition = nearestChest.CFrame * CFrame.new(0, 2.5, 0)
+            teleportTo(targetPosition)
+        end
+    end
+end
+
+-- Inicia o script de forma segura, esperando o jogo carregar
+if getCharacter() then
+    startChestFarm()
+else
+    LocalPlayer.CharacterAdded:Wait(function()
+        startChestFarm()
+    end)
+end
